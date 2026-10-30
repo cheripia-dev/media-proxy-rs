@@ -45,7 +45,7 @@ serde_json = { version = "1", optional = true }
 reqwest = { version = "0.13", default-features = false, features = ["stream", "rustls"], optional = true }
 image = "^0.25.10"
 webp = { git = "https://github.com/kozakura913/webp-rs.git", rev = "8e609215ac2e36dec51f31f7af56b41f6fdf8d91", default-features = false }
-resvg = { version = "0.48", default-features = false, features = ["text", "system-fonts", "raster-images", "svgz"] }
+resvg = { version = "0.49", default-features = false, features = ["text", "system-fonts", "raster-images", "svgz"] }
 rexif = "0.7"
 avif-decoder_dep = { path = "./avif-decoder_dep", optional = true }
 chrono = { version = "0.4", optional = true }
