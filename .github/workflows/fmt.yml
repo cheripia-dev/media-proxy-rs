@@ -15,11 +15,19 @@ jobs:
       issues: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust stable with rustfmt
-        uses: dtolnay/rust-toolchain@stable
+        # dtolnay/rust-toolchain は `toolchain` 入力を省略すると uses: の ref を
+        # ツールチェーン名として使う (@stable なら stable を入れる)。SHA 固定では
+        # ref が 40 桁文字列になるため、toolchain 入力の明示が必須。
+        # SHA は master ブランチ履歴内のものを選ぶこと。履歴外のコミット
+        # (stable / nightly 等のブランチ先端) はいつかガベージコレクションされて
+        # workflow が失敗する (README に明記あり)。他のジョブと同じ master の SHA に
+        # 統一し、stable 側は入力で指定する。
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
+          toolchain: stable
           components: rustfmt
 
       - name: Check formatting
@@ -32,7 +40,7 @@ jobs:
 
       - name: Post comment on failure
         if: github.event_name == 'pull_request' && steps.fmt.outputs.exit_code != '0'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const marker = '<!-- cargo-fmt-check -->';
@@ -70,7 +78,7 @@ jobs:
 
       - name: Resolve comment on success
         if: github.event_name == 'pull_request' && steps.fmt.outputs.exit_code == '0'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const marker = '<!-- cargo-fmt-check -->';
