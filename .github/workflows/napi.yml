@@ -148,8 +148,11 @@ jobs:
   build-darwin-arm64:
     name: build (aarch64-apple-darwin)
     # Apple Silicon ネイティブランナーでクロスなしにビルドする。
-    # macos-14 は arm64 (M1) ランナー。latest 系に追従せず固定する。
-    runs-on: macos-14
+    # macos-14 はイメージ (macos-14-arm64-us-default) の提供が終わって
+    # "The configuration ... is not supported" になったため latest 系に追従させる。
+    # latest も arm64。最低対応 OS は MACOSX_DEPLOYMENT_TARGET で固定するので
+    # ランナーのメジャーが上がっても成果物の minos は変わらない。
+    runs-on: macos-latest
     permissions:
       contents: read
       id-token: write
@@ -177,9 +180,10 @@ jobs:
           # (Linux Docker と同じスクリプト・同じバージョン。dav1d の取得元は
           # github ミラー https://github.com/videolan/dav1d.git)。
           # openjp2 は pure-Rust 実装のため不要。
-          # `brew update` は Tier-3 の macos-14 でボトルの無い新版定義を引き、
-          # 依存のソースビルド＋リンク衝突 (openssl@3 vs openssl@1.1) を
-          # 起こしたため実行しない (ピン留め済みボトルをそのまま使う)。
+          # `brew update` は macOS のメジャー切り替え直後のランナーでボトルの無い
+          # 新版定義を引き、依存のソースビルド＋リンク衝突 (openssl@3 vs
+          # openssl@1.1) を起こしたため実行しない (HOMEBREW_NO_AUTO_UPDATE=1 で
+          # イメージにピン留め済みボトルをそのまま使う)。
           brew install pkg-config meson ninja nasm
 
       - name: Build dav1d/lcms2 static libs (GitHub mirror)
