@@ -269,15 +269,10 @@ jobs:
 
   build-windows-msvc:
     name: build (x86_64-pc-windows-msvc)
-    # Windows ネイティブランナーで MSVC ビルドする (macOS 版と同じ方針)。
-    # mingw (x86_64-pc-windows-gnu) での Linux クロスは jpegxr (SAL マクロ +
-    # バックスラッシュ include) が原因で不可であり、作れても MSYS2 版 Node 専用で
-    # 公式 Node.js では動かないため、公式 Node.js 向けの msvc をネイティブで作る。
-    # ランナーは他ジョブと同じく `-latest` 追従方針 (windows-latest = 現時点では
-    # windows-2025 イメージ)。MSVC / Windows SDK はイメージ移行で変わりうるが、
+    # Windows ネイティブランナーで MSVC ビルドする。
+    # ランナーは他ジョブと同じく `-latest` 追従方針。MSVC / Windows SDK はイメージ移行で変わりうるが、
     # Rust は RUST_VERSION と rust-toolchain.toml、dav1d / lcms2 は workflow env と
-    # build-deps.sh、CRT は .cargo/config.toml の /MT で固定しており、
-    # 版ズレは "Verify dav1d/lcms2 versions" step が止める。
+    # build-deps.sh、CRT は .cargo/config.toml の /MT で固定。
     runs-on: windows-latest
     permissions:
       contents: read
