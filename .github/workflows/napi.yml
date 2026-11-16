@@ -150,8 +150,9 @@ jobs:
     # Apple Silicon ネイティブランナーでクロスなしにビルドする。
     # macos-14 はイメージ (macos-14-arm64-us-default) の提供が終わって
     # "The configuration ... is not supported" になったため latest 系に追従させる。
-    # latest も arm64。最低対応 OS は MACOSX_DEPLOYMENT_TARGET で固定するので
-    # ランナーのメジャーが上がっても成果物の minos は変わらない。
+    # latest も arm64。最低対応 OS は MACOSX_DEPLOYMENT_TARGET で固定するが、
+    # ランナーのメジャーが上がっても変わらない保証はないため、成果物の minos と
+    # アーキは "Verify minos / arch (hard gate)" step で必ず検証する。
     runs-on: macos-latest
     permissions:
       contents: read
@@ -238,8 +239,22 @@ jobs:
       - name: Inspect linked libs (informational)
         run: |
           otool -L ./artifacts/media-proxy-napi.darwin-arm64.node || true
-          # 最低対応バージョン (minos) が MACOSX_DEPLOYMENT_TARGET 通りか見る。
-          otool -l ./artifacts/media-proxy-napi.darwin-arm64.node | grep -A3 LC_BUILD_VERSION || true
+
+      - name: Verify minos / arch (hard gate)
+        run: |
+          # README で「macOS 11.0 以上」と謳っている契約そのものなので、
+          # 表示ではなく失敗で止める。minos が MACOSX_DEPLOYMENT_TARGET
+          # (11.0) と違う場合は SDK / リンカの都合でズれた合図。
+          # LC_BUILD_VERSION が無い古い形式 (LC_VERSION_MIN_MACOSX) も弾く。
+          node_file=./artifacts/media-proxy-napi.darwin-arm64.node
+          minos=$(otool -l "$node_file" \
+            | awk '/LC_BUILD_VERSION/{f=1} f&&/minos/{print $2; exit}')
+          echo "minos=${minos:-<none>} (expected 11.0)"
+          test "${minos:-}" = "11.0" || exit 1
+          # 成果物名 darwin-arm64 とラベル (macos-latest = arm64) の取り違え防止。
+          arch=$(uname -m)
+          echo "arch=${arch} (expected arm64)"
+          test "${arch}" = "arm64" || exit 1
 
       - name: Smoke test (native)
         run: node .github/napi/smoke-test.js ./artifacts/media-proxy-napi.darwin-arm64.node asset/dummy.png darwin-arm64
