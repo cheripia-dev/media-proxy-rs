@@ -234,8 +234,8 @@ jobs:
 
       - name: Verify minos / arch (hard gate)
         run: |
-          # ランナーのメジャーが上がってもアーキテクチャと最低対応OSが変わらない保証はないため、成果物の minos とアーキテクチャを必ず検証する。
-          # README で「macOS 11.0 以上」と謳っている契約そのものなので、表示ではなく失敗で止める。minos が MACOSX_DEPLOYMENT_TARGET (11.0) と違う場合は SDK / リンカの都合で壊れている。
+          # ランナーのバージョンが上がってもアーキテクチャと最低対応OSが変わらない保証はないため、成果物の minos とアーキテクチャを必ず検証する。
+          # README で「macOS 11.0 以上」と仕様で定めているので失敗させる。minos が MACOSX_DEPLOYMENT_TARGET (11.0) と違う場合は SDK / リンカの都合で壊れている。
           # LC_BUILD_VERSION が無い古い形式 (LC_VERSION_MIN_MACOSX) も弾く。
           node_file=./artifacts/media-proxy-napi.darwin-arm64.node
           minos=$(otool -l "$node_file" \
