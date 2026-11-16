@@ -148,11 +148,6 @@ jobs:
   build-darwin-arm64:
     name: build (aarch64-apple-darwin)
     # Apple Silicon ネイティブランナーでクロスなしにビルドする。
-    # macos-14 はイメージ (macos-14-arm64-us-default) の提供が終わって
-    # "The configuration ... is not supported" になったため latest 系に追従させる。
-    # latest も arm64。最低対応 OS は MACOSX_DEPLOYMENT_TARGET で固定するが、
-    # ランナーのメジャーが上がっても変わらない保証はないため、成果物の minos と
-    # アーキは "Verify minos / arch (hard gate)" step で必ず検証する。
     runs-on: macos-latest
     permissions:
       contents: read
@@ -180,11 +175,8 @@ jobs:
           # C/C++ 依存は .github/napi/build-deps.sh でソースから静的ビルドする
           # (Linux Docker と同じスクリプト・同じバージョン。dav1d の取得元は
           # github ミラー https://github.com/videolan/dav1d.git)。
-          # openjp2 は pure-Rust 実装のため不要。
-          # `brew update` は macOS のメジャー切り替え直後のランナーでボトルの無い
-          # 新版定義を引き、依存のソースビルド＋リンク衝突 (openssl@3 vs
-          # openssl@1.1) を起こしたため実行しない (HOMEBREW_NO_AUTO_UPDATE=1 で
-          # イメージにピン留め済みボトルをそのまま使う)。
+          # `brew update` は macOS のメジャー切り替え直後のランナーで依存のソースビルド＋リンク衝突 (openssl) を起こしたため実行しない
+          # (HOMEBREW_NO_AUTO_UPDATE=1 でイメージにピン留めされたバージョンをそのまま使う)。
           brew install pkg-config meson ninja nasm
 
       - name: Build dav1d/lcms2 static libs (GitHub mirror)
@@ -242,9 +234,8 @@ jobs:
 
       - name: Verify minos / arch (hard gate)
         run: |
-          # README で「macOS 11.0 以上」と謳っている契約そのものなので、
-          # 表示ではなく失敗で止める。minos が MACOSX_DEPLOYMENT_TARGET
-          # (11.0) と違う場合は SDK / リンカの都合でズれた合図。
+          # ランナーのメジャーが上がってもアーキテクチャと最低対応OSが変わらない保証はないため、成果物の minos とアーキテクチャを必ず検証する。
+          # README で「macOS 11.0 以上」と謳っている契約そのものなので、表示ではなく失敗で止める。minos が MACOSX_DEPLOYMENT_TARGET (11.0) と違う場合は SDK / リンカの都合で壊れている。
           # LC_BUILD_VERSION が無い古い形式 (LC_VERSION_MIN_MACOSX) も弾く。
           node_file=./artifacts/media-proxy-napi.darwin-arm64.node
           minos=$(otool -l "$node_file" \
