@@ -53,7 +53,7 @@ fast_image_resize = "6.1"
 lcms2 = "6.2"
 jpeg-decoder = { version = "0.3.2", default-features = false }
 jxl-oxide = { version = "0.12.6", features = ["image", "lcms2"] }
-jpeg2k = { version = "0.10.1", default-features = false, features = ["image", "openjp2"] }
+jpeg2k = { version = "0.11", default-features = false, features = ["image"] }
 jpegxr = { git = "https://github.com/cheripia-dev/jpegxr", rev = "94b9fe0f9e0242f454883593d75888cd3fc71f3e" }
 mp4parse = { version = "0.17", features = ["unstable-api"], optional = true }
 dav1d = { version = "0.11", optional = true }
