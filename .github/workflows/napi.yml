@@ -267,8 +267,12 @@ jobs:
     # mingw (x86_64-pc-windows-gnu) での Linux クロスは jpegxr (SAL マクロ +
     # バックスラッシュ include) が原因で不可であり、作れても MSYS2 版 Node 専用で
     # 公式 Node.js では動かないため、公式 Node.js 向けの msvc をネイティブで作る。
-    # windows-2022 に固定する (latest 追従で MSVC/Windows SDK が変わるのを避ける)。
-    runs-on: windows-2022
+    # ランナーは他ジョブと同じく `-latest` 追従方針 (windows-latest = 現時点では
+    # windows-2025 イメージ)。MSVC / Windows SDK はイメージ移行で変わりうるが、
+    # Rust は RUST_VERSION と rust-toolchain.toml、dav1d / lcms2 は workflow env と
+    # build-deps.sh、CRT は .cargo/config.toml の /MT で固定しており、
+    # 版ズレは "Verify dav1d/lcms2 versions" step が止める。
+    runs-on: windows-latest
     permissions:
       contents: read
       id-token: write
@@ -297,6 +301,11 @@ jobs:
           # pkgconfiglite: build-deps.sh で作った dav1d/lcms2 を
           # pkg-config 経由で探すために必要。Strawberry 同梱の
           # pkg-config.bat は broken 扱いのため別途用意。
+          # nasm と pkgconfiglite は Windows イメージに同梱されていないため必須。
+          # ninja と llvm は現行 GA イメージで既定インストール (windows-2025 で
+          # Ninja 1.13.2 / LLVM 20.1.8、windows-2022 でも同版) なので、choco での
+          # 指定は既定版を上書きする形になっている。削るなら meson と bindgen
+          # (libclang) がイメージ既定版で通るかを CI で確認してからにすること。
           choco install -y nasm ninja llvm pkgconfiglite
           # choco の nasm は EXE 形式で C:\Program Files\NASM に入り、
           # その場の PATH に載らないため GITHUB_PATH で後段に引き継ぐ。
