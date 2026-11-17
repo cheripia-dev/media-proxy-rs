@@ -81,7 +81,12 @@ pub(crate) fn render_svg(
 }
 
 fn svg_size(tree: &usvg::Tree) -> usvg::Size {
-	let bb = tree.root().bounding_box();
+	// resvg 0.50 で bounding_box() が content の無いノード (空グループ等) に対し
+	// None を返すようになった。従来これらの bbox は不正値で、この場合は
+	// canvas size (tree.size()) を使っていたので同じ扱いにする。
+	let Some(bb) = tree.root().bounding_box() else {
+		return tree.size();
+	};
 	if bb.width() > tree.size().width() || bb.height() > tree.size().height() {
 		if let Some(size) = usvg::Size::from_wh(bb.width(), bb.height()) {
 			return size;

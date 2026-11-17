@@ -213,10 +213,10 @@ mod tests {
 	}
 
 	fn srgb_profile() -> Vec<u8> {
-		let mut profile = Profile::new_srgb();
-		let path = std::env::temp_dir().join("media-proxy-rs-test-srgb.icc");
-		profile.save_profile_to_file(&path).unwrap();
-		std::fs::read(&path).unwrap()
+		// ファイル経由にすると temp_dir の固定パスを全テストが並列で読み書きして
+		// 競合する (どのテストが落ちるか実行ごとに変わる)。ICC バイト列は
+		// メモリ上で取り出せるので、ファイル I/O を使わない。
+		Profile::new_srgb().icc().unwrap()
 	}
 
 	#[test]

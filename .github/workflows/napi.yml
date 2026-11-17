@@ -44,18 +44,18 @@ jobs:
             dockerfile_target: out-aarch64-musl
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           image: tonistiigi/binfmt:latest
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build napi binary in Docker
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: .github/napi/Dockerfile
@@ -123,7 +123,7 @@ jobs:
         run: gzip -9 media-proxy-napi.${{ matrix.platform }}.node
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: media-proxy-napi-${{ matrix.target }}
           path: artifacts/media-proxy-napi.${{ matrix.platform }}.node.gz
@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload JS binding artifact
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: media-proxy-napi-js
           path: |
@@ -141,15 +141,14 @@ jobs:
 
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: artifacts/media-proxy-napi.${{ matrix.platform }}.node.gz
 
   build-darwin-arm64:
     name: build (aarch64-apple-darwin)
     # Apple Silicon ネイティブランナーでクロスなしにビルドする。
-    # macos-14 は arm64 (M1) ランナー。latest 系に追従せず固定する。
-    runs-on: macos-14
+    runs-on: macos-latest
     permissions:
       contents: read
       id-token: write
@@ -167,7 +166,7 @@ jobs:
       SYSTEM_DEPS_DAV1D_BUILD_INTERNAL: never
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install system dependencies
         env:
@@ -176,10 +175,8 @@ jobs:
           # C/C++ 依存は .github/napi/build-deps.sh でソースから静的ビルドする
           # (Linux Docker と同じスクリプト・同じバージョン。dav1d の取得元は
           # github ミラー https://github.com/videolan/dav1d.git)。
-          # openjp2 は pure-Rust 実装のため不要。
-          # `brew update` は Tier-3 の macos-14 でボトルの無い新版定義を引き、
-          # 依存のソースビルド＋リンク衝突 (openssl@3 vs openssl@1.1) を
-          # 起こしたため実行しない (ピン留め済みボトルをそのまま使う)。
+          # `brew update` は macOS のメジャー切り替え直後のランナーで依存のソースビルド＋リンク衝突 (openssl) を起こしたため実行しない
+          # (HOMEBREW_NO_AUTO_UPDATE=1 でイメージにピン留めされたバージョンをそのまま使う)。
           brew install pkg-config meson ninja nasm
 
       - name: Build dav1d/lcms2 static libs (GitHub mirror)
@@ -196,19 +193,19 @@ jobs:
           pkg-config --modversion lcms2
 
       - name: Install Rust (rust-toolchain.toml と同じ版)
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: napi/package-lock.json
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: napi-aarch64-apple-darwin-static
 
@@ -234,8 +231,21 @@ jobs:
       - name: Inspect linked libs (informational)
         run: |
           otool -L ./artifacts/media-proxy-napi.darwin-arm64.node || true
-          # 最低対応バージョン (minos) が MACOSX_DEPLOYMENT_TARGET 通りか見る。
-          otool -l ./artifacts/media-proxy-napi.darwin-arm64.node | grep -A3 LC_BUILD_VERSION || true
+
+      - name: Verify minos / arch (hard gate)
+        run: |
+          # ランナーのバージョンが上がってもアーキテクチャと最低対応OSが変わらない保証はないため、成果物の minos とアーキテクチャを必ず検証する。
+          # README で「macOS 11.0 以上」と仕様で定めているので失敗させる。minos が MACOSX_DEPLOYMENT_TARGET (11.0) と違う場合は SDK / リンカの都合で壊れている。
+          # LC_BUILD_VERSION が無い古い形式 (LC_VERSION_MIN_MACOSX) も弾く。
+          node_file=./artifacts/media-proxy-napi.darwin-arm64.node
+          minos=$(otool -l "$node_file" \
+            | awk '/LC_BUILD_VERSION/{f=1} f&&/minos/{print $2; exit}')
+          echo "minos=${minos:-<none>} (expected 11.0)"
+          test "${minos:-}" = "11.0" || exit 1
+          # 成果物名 darwin-arm64 とラベル (macos-latest = arm64) の取り違え防止。
+          arch=$(uname -m)
+          echo "arch=${arch} (expected arm64)"
+          test "${arch}" = "arm64" || exit 1
 
       - name: Smoke test (native)
         run: node .github/napi/smoke-test.js ./artifacts/media-proxy-napi.darwin-arm64.node asset/dummy.png darwin-arm64
@@ -245,7 +255,7 @@ jobs:
         run: gzip -9 media-proxy-napi.darwin-arm64.node
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: media-proxy-napi-aarch64-apple-darwin
           path: artifacts/media-proxy-napi.darwin-arm64.node.gz
@@ -253,18 +263,17 @@ jobs:
 
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: artifacts/media-proxy-napi.darwin-arm64.node.gz
 
   build-windows-msvc:
     name: build (x86_64-pc-windows-msvc)
-    # Windows ネイティブランナーで MSVC ビルドする (macOS 版と同じ方針)。
-    # mingw (x86_64-pc-windows-gnu) での Linux クロスは jpegxr (SAL マクロ +
-    # バックスラッシュ include) が原因で不可であり、作れても MSYS2 版 Node 専用で
-    # 公式 Node.js では動かないため、公式 Node.js 向けの msvc をネイティブで作る。
-    # windows-2022 に固定する (latest 追従で MSVC/Windows SDK が変わるのを避ける)。
-    runs-on: windows-2022
+    # Windows ネイティブランナーで MSVC ビルドする。
+    # ランナーは他ジョブと同じく `-latest` 追従方針。MSVC / Windows SDK はイメージ移行で変わりうるが、
+    # Rust は RUST_VERSION と rust-toolchain.toml、dav1d / lcms2 は workflow env と
+    # build-deps.sh、CRT は .cargo/config.toml の /MT で固定。
+    runs-on: windows-latest
     permissions:
       contents: read
       id-token: write
@@ -283,16 +292,21 @@ jobs:
       SYSTEM_DEPS_DAV1D_BUILD_INTERNAL: never
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Install system dependencies
         run: |
           # pkgconfiglite: build-deps.sh で作った dav1d/lcms2 を
           # pkg-config 経由で探すために必要。Strawberry 同梱の
           # pkg-config.bat は broken 扱いのため別途用意。
+          # nasm と pkgconfiglite は Windows イメージに同梱されていないため必須。
+          # ninja と llvm は現行 GA イメージで既定インストール (windows-2025 で
+          # Ninja 1.13.2 / LLVM 20.1.8、windows-2022 でも同版) なので、choco での
+          # 指定は既定版を上書きする形になっている。削るなら meson と bindgen
+          # (libclang) がイメージ既定版で通るかを CI で確認してからにすること。
           choco install -y nasm ninja llvm pkgconfiglite
           # choco の nasm は EXE 形式で C:\Program Files\NASM に入り、
           # その場の PATH に載らないため GITHUB_PATH で後段に引き継ぐ。
@@ -334,19 +348,19 @@ jobs:
           pkg-config --modversion lcms2
 
       - name: Install Rust (rust-toolchain.toml と同じ版)
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: napi/package-lock.json
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: napi-x86_64-pc-windows-msvc
 
@@ -376,7 +390,7 @@ jobs:
         run: gzip -9 media-proxy-napi.win32-x64-msvc.node
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: media-proxy-napi-x86_64-pc-windows-msvc
           path: artifacts/media-proxy-napi.win32-x64-msvc.node.gz
@@ -384,7 +398,7 @@ jobs:
 
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: artifacts/media-proxy-napi.win32-x64-msvc.node.gz
 
@@ -398,10 +412,10 @@ jobs:
       attestations: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: downloaded
           pattern: media-proxy-napi-*
@@ -436,7 +450,7 @@ jobs:
           fi
 
       - name: Attest release provenance
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: release/*.gz
 
@@ -450,7 +464,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check tag matches napi/package.json version
         run: |
@@ -464,7 +478,7 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: 'npm'
@@ -481,7 +495,7 @@ jobs:
         run: npm ci
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: downloaded
           pattern: media-proxy-napi-*

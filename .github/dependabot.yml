@@ -14,6 +14,7 @@ updates:
   # GitHub Actions を commit SHA 参照で維持する。タグ参照 (例 `@v7`) はタグの
   # 付け替え (tag mutation) に耐えないため、SHA 固定したうえで dependabot が SHA を
   # 追従更新し、変更履歴として version コメントを残す。
+  # workflow の `uses:` はすべて `@<40桁SHA> # <version>` の形式で固定している。
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -23,6 +24,11 @@ updates:
     groups:
       actions-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # dtolnay/rust-toolchain は semver タグを持たず、master / stable ブランチの
+      # SHA を参照している。dependabot は version を決定できないため追従せず、
+      # rust-toolchain.toml の更新に合わせて手動で SHA を更新する。
+      - dependency-name: "dtolnay/rust-toolchain"
 
   # ベースイメージ (rust / alpine) の更新を追従する。
   # NOTE: 現状 Dockerfile は `latest` タグ参照で digest 固定していないため、dependabot は
