@@ -192,7 +192,11 @@ jobs:
         run: |
           mkdir /tmp/app/
           chmod o+rwx /tmp/app/
-          docker run --rm -t -v /tmp/app:/tmp/app ${{ github.repository }}:latest cp /media-proxy-rs/media-proxy-rs /tmp/app/
+          # scratch イメージには cp が含まれないので、イメージ内でコマンドを実行しない。
+          # docker cp は起動していないコンテナからでも取り出せる (プロセス起動が無いのでQEMUも不要)。
+          cid=$(docker create ${{ github.repository }}:latest)
+          docker cp "$cid":/media-proxy-rs/media-proxy-rs /tmp/app/
+          docker rm "$cid"
 
       - name: gzip Application
         working-directory: /tmp/app
@@ -313,7 +317,7 @@ jobs:
       - name: Run App
         run: |
           docker network create --driver bridge servers
-          docker run -d -p 12766:12766 --net=servers -e MEDIA_PROXY_ALLOWED_NETWORKS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --platform ${{ matrix.platform }} ${{ github.repository }}:latest
+          docker run -d -p 12766:12766 --name media-proxy --net=servers -e MEDIA_PROXY_ALLOWED_NETWORKS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --platform ${{ matrix.platform }} ${{ github.repository }}:latest
           docker run -d -p 8080:80 --net=servers --name nginx -v ${{ runner.temp }}/http:/usr/share/nginx/html nginx:stable-alpine
       - name: Curl Test
         run: |
@@ -322,6 +326,29 @@ jobs:
           ls ${{ runner.temp }}/http | xargs -I{} bash -c "curl -vvo ${{ runner.temp }}/result/{}.webp http://localhost:12766/test.webp?url=http%3A%2F%2Fnginx%2F{}"
           #空のファイルがあると失敗する
           ls ${{ runner.temp }}/result | xargs -I{} test -s ${{ runner.temp }}/result/{}
+      - name: Check Healthcheck
+        run: |
+          # 最終ステージは scratch なのでシェルは不要。HEALTHCHECK と同じ exec フォームで
+          # ./healthcheck を実行し、UID 852 と WORKDIR (/media-proxy-rs) で動くことを確認する。
+          docker exec media-proxy ./healthcheck
+          # Dockerfile の HEALTHCHECK 指定自体が評価されて healthy になることも確認する。
+          # --start-period=15s / --interval=30s なので評価完了まで最大2分ほど待つ。
+          # QEMU 実行のプラットフォームでは一時的に unhealthy になり得るため、
+          # unhealthy の間は再検査し、最後まで healthy にならなければ失敗させる。
+          for i in $(seq 1 12); do
+            status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' media-proxy)
+            if [ "$status" = healthy ]; then
+              exit 0
+            fi
+            if [ "$status" = none ]; then
+              echo "no HEALTHCHECK in the image: $status"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "health status: $status"
+          docker inspect --format '{{json .State.Health}}' media-proxy
+          exit 1
 
   merge:
     runs-on: ubuntu-latest
