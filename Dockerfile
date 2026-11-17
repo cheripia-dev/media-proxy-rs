@@ -38,15 +38,29 @@ COPY examples ./examples
 COPY napi ./napi
 RUN --mount=type=cache,target=/var/cache/cargo --mount=type=cache,target=/app/target bash /app/crossfiles/build.sh
 
-FROM alpine:latest
+FROM build_app AS pkg
 ARG UID="852"
 ARG GID="852"
-RUN addgroup -g "${GID}" proxy && adduser -u "${UID}" -G proxy -D -h /media-proxy-rs -s /bin/sh proxy
+# ビルド成果物のスモークテスト。静的リンクされた musl バイナリは Debian 系の
+# ビルダー上でもそのまま動くため、シェルの使えるここで実施する。
+RUN bash -c './media-proxy-rs & for i in $(seq 1 30); do ./healthcheck && exit 0; sleep 1; done; exit 1'
+# シェルの無い最終ステージでも config.json の自動生成 (cwd への書き込み) ができる
+# よう、配置と所有者を先に用意しておく。RUN chown はビルドステージでしかできない。
+RUN mkdir -p /out/media-proxy-rs && cp /app/media-proxy-rs /app/healthcheck /out/media-proxy-rs/ && chown -R "${UID}:${GID}" /out/media-proxy-rs
+
+FROM scratch
+ARG UID="852"
+ARG GID="852"
+# 静的リンクバイナリの唯一のランタイム依存は TLS ルート証明書。
+# reqwest (rustls-native-certs) が /etc/ssl/certs/ca-certificates.crt を読む。
+# ホストの CA ストア (社内 CA 等) を使いたい場合は運用側のバインドマウントで上書きできる。
+COPY --from=build_app /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# /out/media-proxy-rs をディレクトリごとコピー。--chown でトップのディレクトリ自体の
+# 所有者も設定する (BuildKit は COPY 元のディレクトリ所有権を運ばない)。
+COPY --from=pkg --chown="${UID}:${GID}" /out/media-proxy-rs /media-proxy-rs
 WORKDIR /media-proxy-rs
-USER proxy
-COPY --from=build_app /app/media-proxy-rs ./media-proxy-rs
-COPY --from=build_app /app/healthcheck ./healthcheck
-RUN sh -c "./media-proxy-rs&" && for i in $(seq 1 30); do ./healthcheck && exit 0; sleep 1; done; exit 1
-HEALTHCHECK --interval=30s --timeout=3s --start-period=15s CMD ./healthcheck || exit 1
+USER "${UID}:${GID}"
 EXPOSE 12766
+# シェルが無いので HEALTHCHECK は exec フォーム。healthcheck は失敗時に非ゼロで終わる。
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s CMD ["./healthcheck"]
 CMD ["./media-proxy-rs"]
