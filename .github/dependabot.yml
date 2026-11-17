@@ -30,7 +30,7 @@ updates:
       # rust-toolchain.toml の更新に合わせて手動で SHA を更新する。
       - dependency-name: "dtolnay/rust-toolchain"
 
-  # ベースイメージ (rust / alpine) の更新を追従する。
+  # ベースイメージ (rust) の更新を追従する。
   # NOTE: 現状 Dockerfile は `latest` タグ参照で digest 固定していないため、dependabot は
   # 更新PRを作らない。追従させる場合は `rust:latest@sha256:...` のように digest 固定する。
   - package-ecosystem: "docker"

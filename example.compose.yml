@@ -8,6 +8,12 @@ services:
       - MEDIA_PROXY_CONFIG_PATH=/config/config.json
     volumes:
       - ./config/:/config
+      # イメージにはCA証明書が焼き込まれている。社内CAなどホストのCAストアを
+      # 使いたい場合はバインドマウントで上書きできる。
+      # Debian/Ubuntu/Alpine/Arch 系ホスト:
+      # - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
+      # RHEL/Fedora 系ホスト:
+      # - /etc/pki/tls/certs/ca-bundle.crt:/etc/ssl/certs/ca-certificates.crt:ro
     ports:
       - "80:12766"
 
