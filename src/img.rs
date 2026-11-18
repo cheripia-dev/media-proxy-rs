@@ -39,6 +39,17 @@ fn le24(b: &[u8]) -> u32 {
 /// agree on the same policy value.
 pub(crate) const ANIMATION_FRAMES_LIMIT: u64 = 1000;
 
+/// `AnimationDecoder::loop_count()` を WebP の `ANIM` チャンクの loop_count に変換する。
+/// WebP は 0 が無限ループ。APNG の `num_plays` / GIF の repeat はそのまま渡す
+/// (gif2webp や MNG/JXL 経路と同じ扱い)。仕様上の「ループ回数」の解釈差で
+/// 再生回数が ±1 ずれる可能性はあるが、0 を無限として扱う点は共通。
+fn webp_loop_count(loop_count: image::metadata::LoopCount) -> u32 {
+	match loop_count {
+		image::metadata::LoopCount::Infinite => 0,
+		image::metadata::LoopCount::Finite(n) => n.get(),
+	}
+}
+
 fn map_budget_err(e: String) -> ProcessError {
 	let kind = if e.contains("FramesLimit") || e.contains("Decode") {
 		ProcessErrorKind::DecodeLimit
@@ -344,14 +355,20 @@ pub(crate) fn encode_raster(
 			}
 			png_apng_within_budget(src, cfg.max_decode_pixels).map_err(map_budget_err)?;
 			match a.apng() {
-				Ok(frames) => encode_anim(frames.into_frames(), 0, opts, cfg, icc),
+				Ok(frames) => {
+					let loop_count = webp_loop_count(frames.loop_count());
+					encode_anim(frames.into_frames(), loop_count, opts, cfg, icc)
+				}
 				Err(_) => encode_single(src, opts, cfg, codec, icc),
 			}
 		}
 		image::ImageFormat::Gif => {
 			gif_animation_within_budget(src, cfg.max_decode_pixels).map_err(map_budget_err)?;
 			match image::codecs::gif::GifDecoder::new(Cursor::new(src)) {
-				Ok(a) => encode_anim(a.into_frames(), 0, opts, cfg, icc),
+				Ok(a) => {
+					let loop_count = webp_loop_count(a.loop_count());
+					encode_anim(a.into_frames(), loop_count, opts, cfg, icc)
+				}
 				Err(_) => encode_single(src, opts, cfg, codec, icc),
 			}
 		}
@@ -406,7 +423,8 @@ pub(crate) fn encode_raster(
 					let frames = image::Frames::new(Box::new(frames.into_iter()));
 					encode_anim(frames, dec.loop_count, opts, cfg, icc)
 				} else {
-					encode_anim(a.into_frames(), 0, opts, cfg, icc)
+					let loop_count = webp_loop_count(a.loop_count());
+					encode_anim(a.into_frames(), loop_count, opts, cfg, icc)
 				}
 			} else {
 				encode_single(src, opts, cfg, codec, icc)
@@ -702,7 +720,9 @@ pub(crate) fn encode_anim(
 			} else {
 				size = Some((img.width(), img.height()));
 				let mut enc = webp::AnimEncoder::new(img.width(), img.height(), &conf);
-				enc.set_loop_count(loop_count.try_into().unwrap_or_default());
+				// WebP の loop_count は u16。範囲外は libwebp が拒否して
+				// AnimEncoder::encode() が panic するため、ここで飽和させる。
+				enc.set_loop_count(loop_count.min(u16::MAX as u32) as i32);
 				encoder = Some(enc);
 			}
 			if let Ok(aframe) = image_to_frame(&img, start) {
@@ -1551,6 +1571,105 @@ mod tests {
 		assert!(err
 			.message
 			.contains(&format!("FramesLimit {}", ANIMATION_FRAMES_LIMIT)));
+	}
+
+	/// 出力 WebP の ANIM チャンクから loop_count を読む。
+	/// payload は背景色4バイト + loop_count(u16 LE) の計6バイト。
+	fn webp_anim_loop_count(buf: &[u8]) -> u32 {
+		assert_eq!(&buf[0..4], b"RIFF");
+		assert_eq!(&buf[8..12], b"WEBP");
+		let mut pos = 12;
+		while pos + 8 <= buf.len() {
+			let size = u32::from_le_bytes(buf[pos + 4..pos + 8].try_into().unwrap()) as usize;
+			if &buf[pos..pos + 4] == b"ANIM" {
+				let payload = &buf[pos + 8..pos + 8 + size];
+				assert!(payload.len() >= 6, "short ANIM payload");
+				return u16::from_le_bytes([payload[4], payload[5]]) as u32;
+			}
+			pos += 8 + size + (size & 1);
+		}
+		panic!("ANIM chunk not found");
+	}
+
+	fn build_apng_with_plays(num_plays: u32) -> Vec<u8> {
+		let mut out = Vec::new();
+		{
+			let mut enc = png::Encoder::new(Cursor::new(&mut out), 2, 2);
+			enc.set_color(png::ColorType::Rgba);
+			enc.set_depth(png::BitDepth::Eight);
+			enc.set_animated(2, num_plays).unwrap();
+			let mut writer = enc.write_header().unwrap();
+			writer.set_frame_delay(1, 10).unwrap();
+			writer
+				.write_image_data(&[255, 0, 0, 255].repeat(4))
+				.unwrap();
+			writer.set_frame_delay(1, 10).unwrap();
+			writer
+				.write_image_data(&[0, 255, 0, 255].repeat(4))
+				.unwrap();
+			writer.finish().unwrap();
+		}
+		out
+	}
+
+	#[test]
+	fn apng_finite_loop_count_is_preserved() {
+		let src = build_apng_with_plays(3);
+		let (cfg, opts) = test_config_opts(1_000_000);
+		let resp = encode_raster(&src, &opts, &cfg, image::ImageFormat::Png).unwrap();
+		assert_eq!(webp_anim_loop_count(&resp.bytes), 3);
+	}
+
+	#[test]
+	fn apng_infinite_loop_count_stays_infinite() {
+		let src = build_apng_with_plays(0);
+		let (cfg, opts) = test_config_opts(1_000_000);
+		let resp = encode_raster(&src, &opts, &cfg, image::ImageFormat::Png).unwrap();
+		assert_eq!(webp_anim_loop_count(&resp.bytes), 0);
+	}
+
+	fn build_gif_with_repeat(repeat: image::codecs::gif::Repeat) -> Vec<u8> {
+		let mut out = Vec::new();
+		{
+			let mut enc = image::codecs::gif::GifEncoder::new(&mut out);
+			enc.set_repeat(repeat).unwrap();
+			for color in [[255, 0, 0, 255], [0, 255, 0, 255]] {
+				let img = image::RgbaImage::from_pixel(2, 2, image::Rgba(color));
+				let frame = image::Frame::from_parts(
+					img,
+					0,
+					0,
+					image::Delay::from_saturating_duration(Duration::from_millis(10)),
+				);
+				enc.encode_frame(frame).unwrap();
+			}
+		}
+		out
+	}
+
+	#[test]
+	fn gif_finite_loop_count_is_preserved() {
+		let src = build_gif_with_repeat(image::codecs::gif::Repeat::Finite(3));
+		let (cfg, opts) = test_config_opts(1_000_000);
+		let resp = encode_raster(&src, &opts, &cfg, image::ImageFormat::Gif).unwrap();
+		assert_eq!(webp_anim_loop_count(&resp.bytes), 3);
+	}
+
+	#[test]
+	fn gif_infinite_loop_count_stays_infinite() {
+		let src = build_gif_with_repeat(image::codecs::gif::Repeat::Infinite);
+		let (cfg, opts) = test_config_opts(1_000_000);
+		let resp = encode_raster(&src, &opts, &cfg, image::ImageFormat::Gif).unwrap();
+		assert_eq!(webp_anim_loop_count(&resp.bytes), 0);
+	}
+
+	#[test]
+	fn apng_loop_count_over_webp_limit_is_clamped() {
+		// WebP の loop_count は u16 のため、libwebp が拒否して panic しないこと。
+		let src = build_apng_with_plays(u16::MAX as u32 + 1);
+		let (cfg, opts) = test_config_opts(1_000_000);
+		let resp = encode_raster(&src, &opts, &cfg, image::ImageFormat::Png).unwrap();
+		assert_eq!(webp_anim_loop_count(&resp.bytes), u16::MAX as u32);
 	}
 
 	fn tiff_with_orientation(img: &image::GrayImage, orientation: u16) -> Vec<u8> {
