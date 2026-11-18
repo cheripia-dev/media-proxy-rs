@@ -1974,6 +1974,7 @@ dependencies = [
  "lru",
  "mailparse",
  "mp4parse",
+ "png",
  "reqwest",
  "resvg",
  "rexif",

@@ -64,6 +64,9 @@ ipnet = { version = "2", optional = true }
 lru = { version = "0.19", optional = true }
 tower-http = { version = "0.7", features = ["catch-panic"], optional = true }
 
+[dev-dependencies]
+png = "0.18"
+
 [workspace]
 members = [".", "napi"]
 
