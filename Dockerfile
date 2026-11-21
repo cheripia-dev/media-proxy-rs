@@ -8,7 +8,7 @@ RUN bash /app/crossfiles/deps.sh
 
 FROM --platform=$BUILDPLATFORM cross_build AS dav1d
 RUN git clone --branch 1.5.5 --depth 1 https://github.com/videolan/dav1d.git /dav1d_src
-RUN cd /dav1d_src && bash -c "source /app/crossfiles/meson.sh && meson build -Dprefix=/dav1d -Denable_tools=false -Denable_examples=false -Ddefault_library=static --buildtype release --cross-file /app/crossfiles/cross.txt"
+RUN cd /dav1d_src && bash -c "source /app/crossfiles/meson.sh && meson build -Dprefix=/dav1d -Denable_tools=false -Denable_examples=false -Denable_tests=false -Ddefault_library=static --buildtype release --cross-file /app/crossfiles/cross.txt"
 RUN cd /dav1d_src && bash -c "source /app/crossfiles/meson.sh && ninja -C build"
 RUN cd /dav1d_src && bash -c "source /app/crossfiles/meson.sh && ninja -C build install"
 
