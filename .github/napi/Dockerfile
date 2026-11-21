@@ -14,7 +14,7 @@ ARG NODE_VERSION=22.9.0
 # https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt の
 # node-v${NODE_VERSION}-linux-x64.tar.xz の値。NODE_VERSION を上げる際は更新すること。
 ARG NODE_SHA256=1bfae9ef21ab43c92d8274f1bd032bf61f42ea004192a18d4c64477508626142
-ARG DAV1D_VERSION=1.5.4
+ARG DAV1D_VERSION=1.5.5
 ARG LCMS2_VERSION=lcms2.16
 
 # -----------------------------------------------------------------------------
