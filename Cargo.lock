@@ -648,7 +648,19 @@ checksum = "3ee89cb860616069c67520dcd66cacdb900b57c799f634a0eb6d91f6e2a82b61"
 dependencies = [
  "av-data",
  "bitflags 2.13.2",
- "dav1d-sys",
+ "dav1d-sys 0.8.3",
+ "static_assertions",
+]
+
+[[package]]
+name = "dav1d"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9adc599b1036b4c82f04a949dedcdcf8fe8a826ff44ffea2ce91a60c46eb17a0"
+dependencies = [
+ "av-data",
+ "bitflags 2.13.2",
+ "dav1d-sys 0.9.0",
  "static_assertions",
 ]
 
@@ -659,7 +671,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3c91aea6668645415331133ed6f8ddf0e7f40160cd97a12d59e68716a58704b"
 dependencies = [
  "libc",
- "system-deps",
+ "system-deps 7.0.8",
+]
+
+[[package]]
+name = "dav1d-sys"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f5b14527fd151929d4e2610af9df12633b588a9a2e926d8b40b9bf1ddcbe366"
+dependencies = [
+ "libc",
+ "system-deps 9.0.1",
 ]
 
 [[package]]
@@ -1410,7 +1432,7 @@ dependencies = [
  "bytemuck",
  "byteorder-lite",
  "color_quant",
- "dav1d",
+ "dav1d 0.11.1",
  "exr",
  "gif",
  "image-webp",
@@ -1958,7 +1980,7 @@ dependencies = [
  "avif-decoder_dep",
  "axum",
  "chrono",
- "dav1d",
+ "dav1d 0.12.0",
  "fast_image_resize",
  "futures",
  "futures-util",
@@ -3215,6 +3237,19 @@ name = "system-deps"
 version = "7.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "396a35feb67335377e0251fcbc1092fc85c484bd4e3a7a54319399da127796e7"
+dependencies = [
+ "cfg-expr",
+ "heck",
+ "pkg-config",
+ "toml",
+ "version-compare",
+]
+
+[[package]]
+name = "system-deps"
+version = "9.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db551ad38aac61d5e0343e0eeeb0163be3115c4e23b6a025959570ee0c03c67d"
 dependencies = [
  "cfg-expr",
  "heck",
